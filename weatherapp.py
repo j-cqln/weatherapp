@@ -1,10 +1,11 @@
 # Libraries
-import requests
-import country_converter
-
+import os
+import logging
+import datetime
 from configparser import ConfigParser
 
-import datetime
+import requests
+import country_converter
 
 import tkinter as tk
 from tkinter import font
@@ -16,28 +17,37 @@ class WeatherApp:
 
     Creates a GUI weather application
     """
-    ORANGE_BACKGROUND = '#d8ac8e'
-    BLUE_BACKGROUND = '#8ebcd8'
-    PURPLE_BACKGROUND = '#928ed8'
-    ENTRY_BACKGROUND = '#ffffff'
-    BUTTON_BACKGROUND = '#ffffff'
-    ENTRY_TEXT = '#000000'
-    PROMPT_TEXT = '#959595'
-    DISPLAY_TEXT = '#000000'
+    BUTTON_BACKGROUND_COLOR = '#ffffff'
+    ENTRY_BACKGROUND_COLOR = '#ffffff'
+    
+    BUTTON_TEXT_COLOR = '#000000'
+    ENTRY_TEXT_COLOR = '#000000'
+    PROMPT_TEXT_COLOR = '#959595'
+    
+    LIGHT_DISPLAY_TEXT_COLOR = '#000000'
+    DARK_DISPLAY_TEXT_COLOR = '#ffffff'
+
+    DAY_IMAGE_FILE = 'day.png'
+    SUNRISE_IMAGE_FILE = 'sunrise.png'
+    SUNSET_IMAGE_FILE = 'sunset.png'
+    NIGHT_IMAGE_FILE = 'night.png'
 
     def __init__(self):
         """
         Initializes the WeatherApp class
         """
+        self._file_location = os.path.dirname('__file__')
+        self._resources_path = os.path.join(self._file_location, 'resources/')
+
         # Parse configuration file
-        self._config_file = 'config.ini'
+        self._config_file = os.path.join(self._resources_path, 'config.ini')
 
         self._config = ConfigParser()
         self._config.read(self._config_file)
         self._api_key = self._config['Default']['api']
 
         # OpenWeatherMap URL
-        self._url = 'http://api.openweathermap.org/data/2.5/weather?q={}&appid={}'
+        self._url = 'http://api.openweathermap.org/data/2.5/weather?q={},{}&appid={}'
 
         # GUI
         self._root = tk.Tk()
@@ -48,133 +58,136 @@ class WeatherApp:
 
         # Font
         self._root.option_add('*Font', 'helvetica')
-        self._default_font = tk.font.Font(family='helvetica', size=8)
-        self._location_font = tk.font.Font(family='helvetica', size=10)
-        self._coords_font = tk.font.Font(family='helvetica', size=8)
-        self._current_temp_font = tk.font.Font(family='helvetica', size=14)
-        self._max_min_font = tk.font.Font(family='helvetica', size=8)
+        self._default_font = tk.font.Font(family='helvetica', size=10)
+        self._entry_font = tk.font.Font(family='helvetica', size=9)
+        self._button_font = tk.font.Font(family='helvetica', size=9)
+        self._location_font = tk.font.Font(family='helvetica', size=12)
+        self._coords_font = tk.font.Font(family='helvetica', size=9)
+        self._time_font = tk.font.Font(family='helvetica', size=9)
+        self._current_temp_font = tk.font.Font(family='helvetica', size=16)
+        self._max_min_font = tk.font.Font(family='helvetica', size=9)
 
-        self._root.rowconfigure(0, weight=0)
-        self._root.rowconfigure(1, weight=1)
-        self._root.rowconfigure(2, weight=0)
+        # Create canvas
+        self._canvas = tk.Canvas(self._root, width=300, height=400, borderwidth=0, highlightthickness=0)
+        self._canvas.grid(row=0, column=0, sticky='NWSE')
 
-        self._root.columnconfigure(0, weight=1)
-        self._root.columnconfigure(1, weight=0)
-
+        # Create background
+        self._background = self._canvas.create_image(0, 0, anchor='nw')
+        
         # For location entry
+        self._city_prompt = ' city here...'
+        self._country_prompt = ' country here...'
+        
         self._city_text = tk.StringVar(self._root)
-        self._city_entry = tk.Entry(self._root, textvariable=self._city_text, font=self._default_font, justify='left', borderwidth=0, highlightthickness=0)
-        self._city_entry.insert(0, ' city name here...')
-        self._city_entry.bind('<FocusIn>', self._city_entry_focus)
-        self._city_entry.bind('<FocusOut>', self._city_entry_unfocus)
-        self._city_entry.grid(row=0, column=0, padx=(10, 10), pady=(10, 10), sticky='NWSE')
+        self._city_entry = tk.Entry(self._root, textvariable=self._city_text, font=self._entry_font, width=17, justify='left', borderwidth=0, highlightthickness=0)
+        self._city_entry.insert(0, self._city_prompt)
+        self._city_entry.bind('<FocusIn>', lambda event: self._entry_focus(self._city_entry))
+        self._city_entry.bind('<FocusOut>', lambda event: self._entry_unfocus(self._city_entry))
+        self._city_entry_window = self._canvas.create_window(9, 10, anchor='nw', window=self._city_entry)
+
+        self._country_text = tk.StringVar(self._root)
+        self._country_entry = tk.Entry(self._root, textvariable=self._country_text, font=self._entry_font, width=17, justify='left', borderwidth=0, highlightthickness=0)
+        self._country_entry.insert(0, self._country_prompt)
+        self._country_entry.bind('<FocusIn>', lambda event: self._entry_focus(self._country_entry))
+        self._country_entry.bind('<FocusOut>', lambda event: self._entry_unfocus(self._country_entry))
+        self._country_entry_window = self._canvas.create_window(139, 10, anchor='nw', window=self._country_entry)
 
         # Search button
-        self._search_button = tk.Label(self._root, text=' > ', font=self._default_font, anchor='n', justify='center', borderwidth=0, highlightthickness=0)
+        self._search_button = tk.Label(self._root, text='  >', font=self._button_font, width=3, anchor='nw', borderwidth=0, highlightthickness=0)
         self._search_button.bind('<Button-1>', self._add_new_location)
-        self._search_button.grid(row=0, column=1, padx=(0, 10), pady=(10, 10), sticky='NWSE')
-
-        # Frame for location information
-        self._city_frame = tk.Frame(self._root, borderwidth=0, highlightthickness=0)
-        self._city_frame.grid(row=1, column=0, sticky='NWSE')
-        self._city_frame.grid_propagate(False)
+        self._search_button_window = self._canvas.create_window(269, 10, anchor='nw', window=self._search_button)
 
         # Location information
-        self._city_label = tk.Label(self._city_frame, text='', anchor='w', justify='left', font=self._location_font)
-        self._city_label.grid(row=0, column=0, padx=(8, 10), sticky='NWSE')
-
-        self._coords_label = tk.Label(self._city_frame, text='', anchor='w', justify='left', font=self._coords_font)
-        self._coords_label.grid(row=1, column=0, padx=(8, 8), sticky='NWSE')
-
-        self._temp_frame = tk.Frame(self._city_frame, borderwidth=0, highlightthickness=0)
-        self._temp_frame.grid(row=2, column=0, sticky='NWSE')
-
-        self._temp_frame.columnconfigure(0, weight=0)
-        self._temp_frame.columnconfigure(1, weight=0)
-
-        self._current_temp_label = tk.Label(self._temp_frame, text='', anchor='w', justify='left', font=self._current_temp_font)
-        self._current_temp_label.grid(row=0, column=0, padx=(8, 0), sticky='NWSE')
-
-        self._max_min_label = tk.Label(self._temp_frame, text='', anchor='sw', justify='left', font=self._max_min_font)
-        self._max_min_label.grid(row=0, column=1, padx=(0, 8), sticky='NWSE')
+        self._canvas_text_dictionary = {}
         
-        self._weather_label = tk.Label(self._city_frame, text='', anchor='w', justify='left', font=self._default_font)
-        self._weather_label.grid(row=3, column=0, padx=(8, 8), sticky='NWSE')
+        self._location_text = self._canvas.create_text(9, 36, text='', font=self._location_font, anchor='nw')
+        self._coords_text = self._canvas.create_text(9, 61, text='', font=self._coords_font, anchor='nw')
+        self._time_text = self._canvas.create_text(9, 83, text='', font=self._time_font, anchor='nw')
+        self._current_temp_text = self._canvas.create_text(8, 103, text='', font=self._current_temp_font, anchor='nw')
+        self._max_min_text = self._canvas.create_text(60, 110, text='', font=self._max_min_font, anchor='nw')
+        self._weather_text = self._canvas.create_text(9, 131, text='', font=self._default_font, anchor='nw')
+        
+        self._canvas_text_dictionary.update({'location': self._location_text, 'coords': self._coords_text, 'time': self._time_text, 'current_temp': self._current_temp_text, 'max_min': self._max_min_text, 'weather': self._weather_text})
 
-        self._root.bind_all('<Button-1>', lambda event:event.widget.focus_set())
-
-        # Set background color based on current time
-        self._color_update(self._which_background(datetime.datetime.now().hour))
+        # Determine theme based on current time
+        now = datetime.datetime.now()
+        self._update_theme(now.hour, now.minute)
+        
+        # Allow all widgets to be focusable on left click
+        self._root.bind_all('<Button-1>', lambda event: event.widget.focus_set())
 
         # Application loop
         self._root.mainloop()
     
-    def _city_entry_focus(self, *args):
+    def _entry_focus(self, widget):
         """
-        Focus on the city entry widget, remove prompt text if it is displayed
+        Focus on the given entry widget, remove prompt text if it is displayed
+
+        widget: Entry widget to focus on, tkinter widget
         """
-        if self._city_entry.get() == ' city name here...':
-            self._city_entry.delete(1, tk.END)
+        if widget == self._city_entry:
+            prompt_text = self._city_prompt
+        elif widget == self._country_entry:
+            prompt_text = self._country_prompt
+        
+        if widget.get() == prompt_text:
+            widget.delete(1, tk.END)
             
-        self._city_entry.config({'foreground': self.ENTRY_TEXT})
+        widget.config({'foreground': WeatherApp.ENTRY_TEXT_COLOR})
 
-    def _city_entry_unfocus(self, *args):
+    def _entry_unfocus(self, widget):
         """
-        Unfocus from the city entry widget, restoring prompt text if no text entered
-        """
-        if self._city_entry.get() == '' or self._city_entry.get() == ' ':
-            self._city_entry.delete(0, tk.END)
-            self._city_entry.insert(0, ' city name here...')
+        Unfocus from the given entry widget, restoring prompt text if no text entered
 
-        self._city_entry.config({'foreground': self.PROMPT_TEXT})
+        widget: Entry widget to unfocus from, tkinter widget
+        """
+        if widget == self._city_entry:
+            prompt_text = self._city_prompt
+        elif widget == self._country_entry:
+            prompt_text = self._country_prompt
+        
+        if widget.get() == '' or widget.get() == ' ':
+            widget.delete(0, tk.END)
+            widget.insert(0, prompt_text)
+
+        widget.config({'foreground': WeatherApp.PROMPT_TEXT_COLOR})
         self._root.focus_set()
-
-    def _which_background(self, hour):
+    
+    def _update_theme(self, hour, minute):
         """
-        Determinues which background color to use based on given time of day
+        Updates text color and background image based on given time
 
         hour: hour, int
+        minute: minute, int
         """
-        if hour < 5 or hour > 20:
-            background_color = WeatherApp.PURPLE_BACKGROUND
-        elif hour > 7 and hour < 17:
-            background_color = WeatherApp.BLUE_BACKGROUND
+        time = hour * 60 + minute
+        
+        if time < 300 or time > 1200:
+            self._text_color = WeatherApp.DARK_DISPLAY_TEXT_COLOR
+            self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.NIGHT_IMAGE_FILE))
+        elif time > 559 and time < 1020:
+            self._text_color = WeatherApp.LIGHT_DISPLAY_TEXT_COLOR
+            self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.DAY_IMAGE_FILE))
+        elif time > 300 and time < 560:
+            self._text_color = WeatherApp.DARK_DISPLAY_TEXT_COLOR
+            self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.SUNRISE_IMAGE_FILE))
         else:
-            background_color = WeatherApp.ORANGE_BACKGROUND
+            self._text_color = WeatherApp.DARK_DISPLAY_TEXT_COLOR
+            self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.SUNSET_IMAGE_FILE))
 
-        return background_color
-    
-    def _color_update(self, color, parent=None):
-        """
-        Updates colors for widget and all descendant widgets based on current theme mode
+        self._canvas.itemconfigure(self._background, image=self._background_image)
 
-        color: hex color for widgets with dynamic background color, string
-        parent: widget to change color for, tkinter widget
-        """
-        # If no widget provided, start at root
-        if parent is None:
-            parent = self._root
-            parent.config({'background': color})
+        for key, value in self._canvas_text_dictionary.items():
+            self._canvas.itemconfig(value, fill=self._text_color)
 
-        # Change color for all descendant widgets
-        for child in parent.winfo_children():
-            if child.winfo_children():
-                self._color_update(color, child)
-            
-            if type(child) is tk.Entry:
-                child.config({'foreground': WeatherApp.PROMPT_TEXT})
-                child.config({'background': WeatherApp.ENTRY_BACKGROUND})
-            
-            elif type(child) is tk.Label:
-                if child is self._search_button:
-                    child.config({'foreground': WeatherApp.DISPLAY_TEXT})
-                    child.config({'background': WeatherApp.BUTTON_BACKGROUND})
-                else:
-                    child.config({'foreground': WeatherApp.DISPLAY_TEXT})
-                    child.config({'background': color})
-            
-            elif type(child) is tk.Frame:
-                child.config({'background': color})
+        self._city_entry.config({'foreground': WeatherApp.PROMPT_TEXT_COLOR})
+        self._city_entry.config({'background': WeatherApp.ENTRY_BACKGROUND_COLOR})
+
+        self._country_entry.config({'foreground': WeatherApp.PROMPT_TEXT_COLOR})
+        self._country_entry.config({'background': WeatherApp.ENTRY_BACKGROUND_COLOR})
+        
+        self._search_button.config({'foreground': WeatherApp.BUTTON_TEXT_COLOR})
+        self._search_button.config({'background': WeatherApp.BUTTON_BACKGROUND_COLOR})
 
     def _degrees_to_dms(self, lat, lon):
         """
@@ -182,6 +195,8 @@ class WeatherApp:
 
         lat: latitude, float
         lon: longitude, float
+
+        return: formatted latitude and longitude, string
         """
         try:
             lat_d = int(lat)
@@ -212,7 +227,7 @@ class WeatherApp:
             return dms
         except:
             messagebox.showerror('Error', 'Invalid longitude and latitude.')
-            return None
+            return
 
     def _add_new_location(self, *args):
         """
@@ -220,33 +235,43 @@ class WeatherApp:
         """
         # Retrieve user-entered location
         city = self._city_text.get().strip()
+        country = self._country_text.get().strip()
+
+        country_converter.convert(country, to='ISO2')
+        
+        if country[:2] != country:
+            country = ''
 
         # If not placeholder text, retrieve and display weather information
-        if city != 'city name here...':
-            weather = self._get_weather(city)
+        if city != self._city_prompt.strip():
+            weather = self._get_weather(city, country)
             
             if weather:
-                self._city_label.config({'text': '{}, {}'.format(weather.get('city'), weather.get('country'))})
-                self._coords_label.config({'text': weather.get('coords')})
-                self._current_temp_label.config({'text': str(weather.get('c'))[:2] + '°C'})
-                self._max_min_label.config({'text': str(weather.get('c_max'))[:2] + ' / ' + str(weather.get('c_min'))[:2]})
-                self._weather_label.config({'text': weather.get('conditions') + ' (' + weather.get('description') + ')'})
-
-                self._color_update(self._which_background(weather.get('hour')))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['location'], text='{}, {}'.format(weather.get('city'), weather.get('country')))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['coords'], text=weather.get('coords'))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['time'], text='{:02d}:{:02d}'.format(int(weather.get('hour')), int(weather.get('minute'))))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['current_temp'], text='{:d}°C'.format(int(weather.get('c'))))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['max_min'], text='{:d} / {:d}'.format(int(weather.get('c_max')), int(weather.get('c_min'))))
+                self._canvas.itemconfigure(self._canvas_text_dictionary['weather'], text='{} ({})'.format(weather.get('conditions'), weather.get('description')))
+                
+                self._update_theme(weather.get('hour'), weather.get('minute'))
     
-    def _get_weather(self, city):
+    def _get_weather(self, city, country):
         """
         Retrieve weather for given location using OpenWeatherMap API
         Weather data provided by OpenWeather, at openweathermap.org
 
         city: city name, string
+        country: country name, string
+
+        return: weather information for the given location, dictionary
         """
         info = None
         result = None
         
         try:
             # Request
-            result = requests.get(self._url.format(city, self._api_key))
+            result = requests.get(self._url.format(city, country, self._api_key))
 
             # Process retrieved weather information
             if result:
@@ -257,16 +282,16 @@ class WeatherApp:
                 country = country_converter.convert(json['sys']['country'], to='name_short')
 
                 k_temp = json['main']['temp']
-                c_temp = k_temp-273.15
-                f_temp = c_temp*1.8+32
+                c_temp = k_temp - 273.15
+                f_temp = c_temp * 1.8 + 32
 
                 k_max = json['main']['temp_max']
-                c_max = k_max-273.15
-                f_max = c_max*1.8+32
+                c_max = k_max - 273.15
+                f_max = c_max * 1.8 + 32
 
                 k_min = json['main']['temp_min']
-                c_min = k_min-273.15
-                f_min = c_min*1.8+32
+                c_min = k_min - 273.15
+                f_min = c_min * 1.8 + 32
 
                 weather_condition = json['weather'][0]['main']
                 weather_description = json['weather'][0]['description']
@@ -300,4 +325,5 @@ class WeatherApp:
         return info
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.CRITICAL)
     WeatherApp()
