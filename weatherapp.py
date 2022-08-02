@@ -73,6 +73,9 @@ class WeatherApp:
 
         # Create background
         self._background = self._canvas.create_image(0, 0, anchor='nw')
+
+        # Weather information
+        self._weather = {}
         
         # For location entry
         self._city_prompt = ' city here...'
@@ -97,6 +100,12 @@ class WeatherApp:
         self._search_button.bind('<Button-1>', self._add_new_location)
         self._search_button_window = self._canvas.create_window(269, 10, anchor='nw', window=self._search_button)
 
+        # Temperature degrees display mode
+        self._degrees_mode = {'mode': 'celsius', 'symbol': '°C', 'key': 'c'}
+        self._degrees_mode_button = tk.Label(self._root, text=' mode: ' + self._degrees_mode['symbol'] + ' ', font=self._button_font, anchor='nw', borderwidth=0, highlightthickness=0)
+        self._degrees_mode_button.bind('<Button-1>', self._toggle_degrees_mode)
+        self._degrees_mode_button_window = self._canvas.create_window(9, 370, anchor='nw', window=self._degrees_mode_button)
+
         # Location information
         self._canvas_text_dictionary = {}
         
@@ -108,7 +117,7 @@ class WeatherApp:
         self._weather_text = self._canvas.create_text(9, 131, text='', font=self._default_font, anchor='nw')
         
         self._canvas_text_dictionary.update({'location': self._location_text, 'coords': self._coords_text, 'time': self._time_text, 'current_temp': self._current_temp_text, 'max_min': self._max_min_text, 'weather': self._weather_text})
-
+        
         # Determine theme based on current time
         now = datetime.datetime.now()
         self._update_theme(now.hour, now.minute)
@@ -121,7 +130,7 @@ class WeatherApp:
     
     def _entry_focus(self, widget):
         """
-        Focus on the given entry widget, remove prompt text if it is displayed
+        Focuses on the given entry widget, remove prompt text if it is displayed
 
         widget: Entry widget to focus on, tkinter widget
         """
@@ -137,7 +146,7 @@ class WeatherApp:
 
     def _entry_unfocus(self, widget):
         """
-        Unfocus from the given entry widget, restoring prompt text if no text entered
+        Unfocuses from the given entry widget, restoring prompt text if no text entered
 
         widget: Entry widget to unfocus from, tkinter widget
         """
@@ -165,10 +174,10 @@ class WeatherApp:
         if time < 300 or time > 1200:
             self._text_color = WeatherApp.DARK_DISPLAY_TEXT_COLOR
             self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.NIGHT_IMAGE_FILE))
-        elif time > 559 and time < 1020:
+        elif time > 479 and time < 1020:
             self._text_color = WeatherApp.LIGHT_DISPLAY_TEXT_COLOR
             self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.DAY_IMAGE_FILE))
-        elif time > 300 and time < 560:
+        elif time > 300 and time < 480:
             self._text_color = WeatherApp.DARK_DISPLAY_TEXT_COLOR
             self._background_image = tk.PhotoImage(file=os.path.join(self._resources_path, WeatherApp.SUNRISE_IMAGE_FILE))
         else:
@@ -189,9 +198,27 @@ class WeatherApp:
         self._search_button.config({'foreground': WeatherApp.BUTTON_TEXT_COLOR})
         self._search_button.config({'background': WeatherApp.BUTTON_BACKGROUND_COLOR})
 
+        self._degrees_mode_button.config({'foreground': WeatherApp.BUTTON_TEXT_COLOR})
+        self._degrees_mode_button.config({'background': WeatherApp.BUTTON_BACKGROUND_COLOR})
+
+    def _toggle_degrees_mode(self, *args):
+        """
+        Toggles the scale, either Celsius or Fahrenheit, used for temperature
+        """
+        # Toggle between Celsius and Fahrenheit
+        if self._degrees_mode['mode'] == 'celsius':
+            self._degrees_mode = {'mode': 'fahrenheit', 'symbol': '°F', 'key': 'f'}
+        else:
+            self._degrees_mode = {'mode': 'celsius', 'symbol': '°C', 'key': 'c'}
+
+        self._degrees_mode_button.config({'text': ' mode: ' + self._degrees_mode['symbol'] + ' '})
+
+        # Update displayed weather information
+        self._display_weather()
+
     def _degrees_to_dms(self, lat, lon):
         """
-        Convert latitude and longitude in decimal degrees to degrees, minutes, seconds
+        Converts latitude and longitude in decimal degrees to degrees, minutes, seconds
 
         lat: latitude, float
         lon: longitude, float
@@ -231,7 +258,7 @@ class WeatherApp:
 
     def _add_new_location(self, *args):
         """
-        Add new location to weather application
+        Adds new location to weather application
         """
         # Retrieve user-entered location
         city = self._city_text.get().strip()
@@ -242,23 +269,18 @@ class WeatherApp:
         if country[:2] != country:
             country = ''
 
-        # If not placeholder text, retrieve and display weather information
+        # If not placeholder text, retrieve weather information
         if city != self._city_prompt.strip():
             weather = self._get_weather(city, country)
-            
+
+            # Display weather information
             if weather:
-                self._canvas.itemconfigure(self._canvas_text_dictionary['location'], text='{}, {}'.format(weather.get('city'), weather.get('country')))
-                self._canvas.itemconfigure(self._canvas_text_dictionary['coords'], text=weather.get('coords'))
-                self._canvas.itemconfigure(self._canvas_text_dictionary['time'], text='{:02d}:{:02d}'.format(int(weather.get('hour')), int(weather.get('minute'))))
-                self._canvas.itemconfigure(self._canvas_text_dictionary['current_temp'], text='{:d}°C'.format(int(weather.get('c'))))
-                self._canvas.itemconfigure(self._canvas_text_dictionary['max_min'], text='{:d} / {:d}'.format(int(weather.get('c_max')), int(weather.get('c_min'))))
-                self._canvas.itemconfigure(self._canvas_text_dictionary['weather'], text='{} ({})'.format(weather.get('conditions'), weather.get('description')))
-                
-                self._update_theme(weather.get('hour'), weather.get('minute'))
+                self._weather = weather
+                self._display_weather()
     
     def _get_weather(self, city, country):
         """
-        Retrieve weather for given location using OpenWeatherMap API
+        Retrieves weather for given location using OpenWeatherMap API
         Weather data provided by OpenWeather, at openweathermap.org
 
         city: city name, string
@@ -323,6 +345,26 @@ class WeatherApp:
             messagebox.showerror('Error', 'Unable to retrieve weather data.')
 
         return info
+
+    def _display_weather(self):
+        """
+        Displays weather information
+        """
+        if self._weather:
+            self._canvas.itemconfigure(self._canvas_text_dictionary['location'], text='{}, {}'.format(self._weather.get('city'), self._weather.get('country')))
+            self._canvas.itemconfigure(self._canvas_text_dictionary['coords'], text=self._weather.get('coords'))
+            self._canvas.itemconfigure(self._canvas_text_dictionary['time'], text='{:02d}:{:02d}'.format(int(self._weather.get('hour')), int(self._weather.get('minute'))))
+            self._canvas.itemconfigure(self._canvas_text_dictionary['current_temp'], text='{:d}{}'.format(int(self._weather.get(self._degrees_mode['key'])), self._degrees_mode['symbol']))
+            self._canvas.itemconfigure(self._canvas_text_dictionary['max_min'], text='{:d} / {:d}'.format(int(self._weather.get(self._degrees_mode['key'] + '_max')), int(self._weather.get(self._degrees_mode['key'] + '_min'))))
+            self._canvas.itemconfigure(self._canvas_text_dictionary['weather'], text='{} ({})'.format(self._weather.get('conditions'), self._weather.get('description')))
+
+            length = len(str(int(self._weather.get(self._degrees_mode['key']))))
+            x = (length - 2) * 10
+            
+            self._canvas.moveto(self._canvas_text_dictionary['max_min'], 60, 110)
+            self._canvas.move(self._canvas_text_dictionary['max_min'], x, 0)
+            
+            self._update_theme(self._weather.get('hour'), self._weather.get('minute'))
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.CRITICAL)
