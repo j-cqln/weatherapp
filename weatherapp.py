@@ -169,6 +169,7 @@ class WeatherApp:
         hour: hour, int
         minute: minute, int
         """
+        # Background and text color based on given time
         time = hour * 60 + minute
         
         if time < 300 or time > 1200:
@@ -188,7 +189,8 @@ class WeatherApp:
 
         for key, value in self._canvas_text_dictionary.items():
             self._canvas.itemconfig(value, fill=self._text_color)
-
+        
+        # Widget background and text color
         self._city_entry.config({'foreground': WeatherApp.PROMPT_TEXT_COLOR})
         self._city_entry.config({'background': WeatherApp.ENTRY_BACKGROUND_COLOR})
 
@@ -358,6 +360,7 @@ class WeatherApp:
             self._canvas.itemconfigure(self._canvas_text_dictionary['max_min'], text='{:d} / {:d}'.format(int(self._weather.get(self._degrees_mode['key'] + '_max')), int(self._weather.get(self._degrees_mode['key'] + '_min'))))
             self._canvas.itemconfigure(self._canvas_text_dictionary['weather'], text='{} ({})'.format(self._weather.get('conditions'), self._weather.get('description')))
 
+            # Position temperature text
             length = len(str(int(self._weather.get(self._degrees_mode['key']))))
             x = (length - 2) * 10
             
