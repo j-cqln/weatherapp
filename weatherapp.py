@@ -134,14 +134,17 @@ class WeatherApp:
 
         widget: Entry widget to focus on, tkinter widget
         """
+        # Determine which widget
         if widget == self._city_entry:
             prompt_text = self._city_prompt
         elif widget == self._country_entry:
             prompt_text = self._country_prompt
         
+        # Remove widget prompt text
         if widget.get() == prompt_text:
             widget.delete(1, tk.END)
-            
+        
+        # Change text color
         widget.config({'foreground': WeatherApp.ENTRY_TEXT_COLOR})
 
     def _entry_unfocus(self, widget):
@@ -150,16 +153,21 @@ class WeatherApp:
 
         widget: Entry widget to unfocus from, tkinter widget
         """
+        # Determine which widget
         if widget == self._city_entry:
             prompt_text = self._city_prompt
         elif widget == self._country_entry:
             prompt_text = self._country_prompt
         
+        # Add widget prompt text
         if widget.get() == '' or widget.get() == ' ':
             widget.delete(0, tk.END)
             widget.insert(0, prompt_text)
-
+        
+        # Change text color
         widget.config({'foreground': WeatherApp.PROMPT_TEXT_COLOR})
+
+        # Unfocus from widget
         self._root.focus_set()
     
     def _update_theme(self, hour, minute):
