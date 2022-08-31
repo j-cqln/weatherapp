@@ -17,6 +17,7 @@ class WeatherApp:
 
     Creates a GUI weather application
     """
+    # Text and background colors
     BUTTON_BACKGROUND_COLOR = '#ffffff'
     ENTRY_BACKGROUND_COLOR = '#ffffff'
     
@@ -27,6 +28,7 @@ class WeatherApp:
     LIGHT_DISPLAY_TEXT_COLOR = '#000000'
     DARK_DISPLAY_TEXT_COLOR = '#ffffff'
 
+    # Image files
     DAY_IMAGE_FILE = 'day.png'
     SUNRISE_IMAGE_FILE = 'sunrise.png'
     SUNSET_IMAGE_FILE = 'sunset.png'
